@@ -1,4 +1,5 @@
 import math
+import sys
 from collections import defaultdict
 # Class definitions for Point and Load
 class Point:
@@ -25,7 +26,7 @@ def load_vrp_data(file_path):
         for line in lines:
             parts = line.split()
             load_id = int(parts[0])
-            pickup = Point(*map(float, parts[1].scrip("()").split(",")))
+            pickup = Point(*map(float, parts[1].strip("()").split(",")))
             dropoff = Point(*map(float, parts[2].strip("()").split(",")))
             loads.append(Load(load_id, pickup, dropoff))
     return loads
@@ -67,10 +68,32 @@ def assign_loads_to_drivers(loads):
         if current_driver:
             drivers[driver_id] = current_driver
             driver_id += 1
-
+    return drivers, total_driven_minutes
 # Function to calculate cost
 def calculate_cost(drivers, total_driven_minutes):
     number_of_drivers = len(drivers)
     total_cost = 500 * number_of_drivers + total_driven_minutes
     return total_cost
 
+
+# Output
+def output_solution(drivers):
+    for driver, loads in drivers.items():
+        print(f"[{','.join(map(str, loads))}]")
+
+
+
+# Function to take command line argument and solve the problem
+def main():
+    if len(sys.argv) != 2:
+        print("Usage: python vrp_solver.py {path_to_problem_file}")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+    loads = load_vrp_data(file_path)
+
+    drivers, total_driven_minutes = assign_loads_to_drivers(loads)
+    output_solution(drivers)
+
+if __name__ == "__main__":
+    main()
