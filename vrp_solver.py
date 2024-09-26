@@ -1,6 +1,7 @@
 import math
 import sys
 from collections import defaultdict
+import time
 # Class definitions for Point and Load
 class Point:
     def __init__(self, x, y):
@@ -75,6 +76,17 @@ def calculate_cost(drivers, total_driven_minutes):
     total_cost = 500 * number_of_drivers + total_driven_minutes
     return total_cost
 
+# Function to solve a single problem and return the total cost
+def solve_problem(file_path):
+    # Load the problem
+    loads = load_vrp_data(file_path)
+    # Solve the problem
+    drivers, total_driven_minutes = assign_loads_to_drivers(loads)
+    # Output the solution
+    output_solution(drivers)
+    # Calculate the total cost
+    total_cost = calculate_cost(drivers, total_driven_minutes)
+    return total_cost
 
 # Output
 def output_solution(drivers):
@@ -95,5 +107,24 @@ def main():
     drivers, total_driven_minutes = assign_loads_to_drivers(loads)
     output_solution(drivers)
 
+"""if __name__ == "__main__":
+    main()"""
+
 if __name__ == "__main__":
-    main()
+    base_path = r"C:\Users\Shadab.Shishegar\PycharmProjects\VRP-Vorto\\"
+    problem_files = [base_path + f"problem{str(i)}.txt" for i in range(1, 21)]
+    total_cost_sum = 0
+    total_files = len(problem_files)
+    start_time = time.time()
+
+    for file_path in problem_files:
+        print(f"\nSolving {file_path}...")
+        total_cost = solve_problem(file_path)
+        total_cost_sum += total_cost
+        print(f"Cost for {file_path}: {total_cost:.2f}\n")
+
+    average_cost = total_cost_sum / total_files
+    end_time = time.time()
+    runtime = end_time - start_time
+    print(f"\nAverage cost for {total_files} problems: {average_cost:.2f}")
+    print(f"\nTotal Runtime for solving {total_files} problems: {runtime:.2f} seconds")
