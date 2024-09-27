@@ -2,6 +2,7 @@ import math
 import sys
 from collections import defaultdict
 import time
+
 # Class definitions for Point and Load
 class Point:
     def __init__(self, x, y):
@@ -30,6 +31,7 @@ def load_vrp_data(file_path):
             pickup = Point(*map(float, parts[1].strip("()").split(",")))
             dropoff = Point(*map(float, parts[2].strip("()").split(",")))
             loads.append(Load(load_id, pickup, dropoff))
+            print(f"Loaded {len(loads)} loads from {file_path}")
     return loads
 
 # Assign load to the drivers
@@ -70,22 +72,71 @@ def assign_loads_to_drivers(loads):
             drivers[driver_id] = current_driver
             driver_id += 1
     return drivers, total_driven_minutes
+
+
+# Heuristic method to optimize the model (C&W)
+def savings_heuristic(depot, loads, distance_threshold=50):
+    routes = [[load.load_id] for load in loads]
+    savings = []
+
+    for i, load1 in enumerate(loads):
+        for j, load2 in enumerate(loads):
+            if i != j:
+                # Only calculate savings if the distance between load1 and load2 is below the threshold
+                if euclidean_distance(load1.dropoff, load2.pickup) <= distance_threshold:
+                    # Calculate savings by merging routes for load1 and load2
+                    to_pickup_load1 = euclidean_distance(depot, load1.pickup)
+                    to_pickup_load2 = euclidean_distance(depot, load2.pickup)
+                    dist_load1_load2 = euclidean_distance(load1.dropoff, load2.pickup)
+                    saving = (to_pickup_load1 + to_pickup_load2) - dist_load1_load2
+                    savings.append((saving, i, j))
+
+    # Sort savings by the largest savings first
+    savings.sort(reverse=True, key=lambda x: x[0])
+    assigned_routes = {i: route for i, route in enumerate(routes)}
+    total_driven_minutes = 0
+
+    # Merge routes based on savings
+    for saving, i, j in savings:
+        if i in assigned_routes and j in assigned_routes and i != j:
+            route_i = assigned_routes[i]
+            route_j = assigned_routes[j]
+
+            # Check if merging these routes is feasible (under 720 minutes)
+            route_cost = calculate_route_cost(depot, route_i + route_j, loads)
+            if route_cost <= 720:
+                # Merge routes
+                assigned_routes[i] = route_i + route_j
+                del assigned_routes[j]
+    # Calculate the final cost
+    total_cost = 500 * len(assigned_routes)  # Fixed driver cost
+    for route in assigned_routes.values():
+        total_cost += calculate_route_cost(depot, route, loads)
+
+    return assigned_routes, total_cost
+
 # Function to calculate cost
-def calculate_cost(drivers, total_driven_minutes):
-    number_of_drivers = len(drivers)
-    total_cost = 500 * number_of_drivers + total_driven_minutes
-    return total_cost
+def calculate_route_cost(depot, route, loads):
+    load_map = {load.load_id: load for load in loads}
+    total_distance = euclidean_distance(depot, load_map[route[0]].pickup)
+
+    for i in range(len(route) - 1):
+        total_distance += euclidean_distance(load_map[route[i]].dropoff, load_map[route[i + 1]].pickup)
+
+    total_distance += euclidean_distance(load_map[route[-1]].dropoff, depot)
+    return total_distance
+
 
 # Function to solve a single problem and return the total cost
 def solve_problem(file_path):
     # Load the problem
     loads = load_vrp_data(file_path)
-    # Solve the problem
-    drivers, total_driven_minutes = assign_loads_to_drivers(loads)
+    depot = Point(0, 0)
+    # Solve the problem using the C&W method
+    drivers, total_cost = savings_heuristic(depot, loads, distance_threshold=100)
     # Output the solution
     output_solution(drivers)
-    # Calculate the total cost
-    total_cost = calculate_cost(drivers, total_driven_minutes)
+
     return total_cost
 
 # Output
