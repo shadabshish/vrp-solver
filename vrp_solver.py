@@ -31,7 +31,7 @@ def load_vrp_data(file_path):
             pickup = Point(*map(float, parts[1].strip("()").split(",")))
             dropoff = Point(*map(float, parts[2].strip("()").split(",")))
             loads.append(Load(load_id, pickup, dropoff))
-            print(f"Loaded {len(loads)} loads from {file_path}")
+            #print(f"Loaded {len(loads)} loads from {file_path}")
     return loads
 
 # Assign load to the drivers
@@ -149,33 +149,10 @@ def output_solution(drivers):
 # Function to take command line argument and solve the problem
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python vrp_solver.py {path_to_problem_file}")
         sys.exit(1)
 
     file_path = sys.argv[1]
-    loads = load_vrp_data(file_path)
-
-    drivers, total_driven_minutes = assign_loads_to_drivers(loads)
-    output_solution(drivers)
-
-"""if __name__ == "__main__":
-    main()"""
+    solve_problem(file_path)
 
 if __name__ == "__main__":
-    base_path = r"C:\Users\Shadab.Shishegar\PycharmProjects\VRP-Vorto\\"
-    problem_files = [base_path + f"problem{str(i)}.txt" for i in range(1, 21)]
-    total_cost_sum = 0
-    total_files = len(problem_files)
-    start_time = time.time()
-
-    for file_path in problem_files:
-        print(f"\nSolving {file_path}...")
-        total_cost = solve_problem(file_path)
-        total_cost_sum += total_cost
-        print(f"Cost for {file_path}: {total_cost:.2f}\n")
-
-    average_cost = total_cost_sum / total_files
-    end_time = time.time()
-    runtime = end_time - start_time
-    print(f"\nAverage cost for {total_files} problems: {average_cost:.2f}")
-    print(f"\nTotal Runtime for solving {total_files} problems: {runtime:.2f} seconds")
+    main()
