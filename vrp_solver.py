@@ -1,7 +1,6 @@
 import math
 import sys
 from collections import defaultdict
-import time
 
 # Class definitions for Point and Load
 class Point:
@@ -15,38 +14,36 @@ class Load:
         self.pickup = pickup
         self.dropoff = dropoff
 
-
 # Function to calculate the distance
 def euclidean_distance(p1, p2):
     return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
 
 # Load VRP data from files
-def load_vrp_data(file_path):
+def load_vrp_data(file_contents):
     loads = []
-    with open(file_path, 'r') as file:
-        lines = file.readlines()[1:] #this part is to skip header
-        for line in lines:
-            parts = line.split()
-            load_id = int(parts[0])
-            pickup = Point(*map(float, parts[1].strip("()").split(",")))
-            dropoff = Point(*map(float, parts[2].strip("()").split(",")))
-            loads.append(Load(load_id, pickup, dropoff))
-            #print(f"Loaded {len(loads)} loads from {file_path}")
+    lines = file_contents.splitlines()[1:]  # Skip header
+    for line in lines:
+        parts = line.split()
+        load_id = int(parts[0])
+        pickup = Point(*map(float, parts[1].strip("()").split(",")))
+        dropoff = Point(*map(float, parts[2].strip("()").split(",")))
+        loads.append(Load(load_id, pickup, dropoff))
     return loads
 
-# Assign load to the drivers
-def assign_loads_to_drivers(loads):
+# Assign load to the drivers ensuring that no driver exceeds the 720-minute shift limit
+def assign_loads_to_drivers_strict(loads):
     depot = Point(0, 0)
     drivers = defaultdict(list)
     driver_id = 1
-    max_minutes = 720 # 12 hours limit
+    max_minutes = 720  # 12 hours limit
     remaining_loads = loads[:]
     total_driven_minutes = 0
 
-    while   remaining_loads:
+    while remaining_loads:
         current_driver = []
         total_minutes = 0
         current_location = depot
+
         while remaining_loads:
             # Find the closest load to the current location
             closest_load = min(
@@ -57,102 +54,63 @@ def assign_loads_to_drivers(loads):
             to_dropoff = euclidean_distance(closest_load.pickup, closest_load.dropoff)
             to_depot = euclidean_distance(closest_load.dropoff, depot)
 
-            # Check if adding this load exceeds the driver's time limit
-            if total_minutes + to_pickup + to_dropoff + to_depot <= max_minutes:
+            # Calculate potential new total if this load is added
+            potential_total = total_minutes + to_pickup + to_dropoff + to_depot
+
+            # Check if adding this load exceeds the driver's time limit (STRICT)
+            if potential_total <= max_minutes:
                 current_driver.append(closest_load.load_id)
                 total_minutes += to_pickup + to_dropoff
-                total_driven_minutes += to_pickup + to_dropoff + to_depot
+                total_driven_minutes += to_pickup + to_dropoff
                 current_location = closest_load.dropoff
                 remaining_loads.remove(closest_load)
             else:
                 break
 
-            # Assign the current driver their loads and start a new driver
+        # After assigning loads to the current driver, add the return to depot
         if current_driver:
             drivers[driver_id] = current_driver
             driver_id += 1
+
+        # If the current driver cannot take more loads, a new driver will start
+        if not current_driver and remaining_loads:
+            current_driver = []
+
     return drivers, total_driven_minutes
 
+# Helper function to get load by id
+def get_load_by_id(load_id, loads):
+    for load in loads:
+        if load.load_id == load_id:
+            return load
+    return None
 
-# Heuristic method to optimize the model (C&W)
-def savings_heuristic(depot, loads, distance_threshold=50):
-    routes = [[load.load_id] for load in loads]
-    savings = []
+# Output solution with only the load assignments
+def output_solution(drivers):
+    for driver, load_ids in drivers.items():
+        print(f"[{','.join(map(str, load_ids))}]")
 
-    for i, load1 in enumerate(loads):
-        for j, load2 in enumerate(loads):
-            if i != j:
-                # Only calculate savings if the distance between load1 and load2 is below the threshold
-                if euclidean_distance(load1.dropoff, load2.pickup) <= distance_threshold:
-                    # Calculate savings by merging routes for load1 and load2
-                    to_pickup_load1 = euclidean_distance(depot, load1.pickup)
-                    to_pickup_load2 = euclidean_distance(depot, load2.pickup)
-                    dist_load1_load2 = euclidean_distance(load1.dropoff, load2.pickup)
-                    saving = (to_pickup_load1 + to_pickup_load2) - dist_load1_load2
-                    savings.append((saving, i, j))
-
-    # Sort savings by the largest savings first
-    savings.sort(reverse=True, key=lambda x: x[0])
-    assigned_routes = {i: route for i, route in enumerate(routes)}
-    total_driven_minutes = 0
-
-    # Merge routes based on savings
-    for saving, i, j in savings:
-        if i in assigned_routes and j in assigned_routes and i != j:
-            route_i = assigned_routes[i]
-            route_j = assigned_routes[j]
-
-            # Check if merging these routes is feasible (under 720 minutes)
-            route_cost = calculate_route_cost(depot, route_i + route_j, loads)
-            if route_cost <= 720:
-                # Merge routes
-                assigned_routes[i] = route_i + route_j
-                del assigned_routes[j]
-    # Calculate the final cost
-    total_cost = 500 * len(assigned_routes)  # Fixed driver cost
-    for route in assigned_routes.values():
-        total_cost += calculate_route_cost(depot, route, loads)
-
-    return assigned_routes, total_cost
-
-# Function to calculate cost
-def calculate_route_cost(depot, route, loads):
-    load_map = {load.load_id: load for load in loads}
-    total_distance = euclidean_distance(depot, load_map[route[0]].pickup)
-
-    for i in range(len(route) - 1):
-        total_distance += euclidean_distance(load_map[route[i]].dropoff, load_map[route[i + 1]].pickup)
-
-    total_distance += euclidean_distance(load_map[route[-1]].dropoff, depot)
-    return total_distance
-
-
-# Function to solve a single problem and return the total cost
-def solve_problem(file_path):
-    # Load the problem
-    loads = load_vrp_data(file_path)
-    depot = Point(0, 0)
-    # Solve the problem using the C&W method
-    drivers, total_cost = savings_heuristic(depot, loads, distance_threshold=100)
-    # Output the solution
+# Solve the problem using the strict driver limits and output the load assignments
+def solve_problem_strict(file_contents):
+    loads = load_vrp_data(file_contents)
+    drivers, _ = assign_loads_to_drivers_strict(loads)
     output_solution(drivers)
 
-    return total_cost
-
-# Output
-def output_solution(drivers):
-    for driver, loads in drivers.items():
-        print(f"[{','.join(map(str, loads))}]")
-
-
-
-# Function to take command line argument and solve the problem
+# Main function to handle command-line argument and solve the problem
 def main():
     if len(sys.argv) != 2:
+        print("Usage: python test.py <file_path>")
         sys.exit(1)
 
     file_path = sys.argv[1]
-    solve_problem(file_path)
+
+    try:
+        with open(file_path, 'r') as file:
+            file_contents = file.read()
+            solve_problem_strict(file_contents)
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
